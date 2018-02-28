@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 ### This program is free software; you can redistribute it and/or modify
 ### it under the terms of the GNU General Public License as published by
@@ -520,6 +520,7 @@ class Options:
         self.connection = None
         self.debug = False
         self.doctype = None
+        self.userinstallation = None
         self.exportfilter = []
         self.exportfilteroptions = ""
         self.fields = {}
@@ -551,12 +552,12 @@ class Options:
 
         ### Get options from the commandline
         try:
-            opts, args = getopt.getopt (args, 'c:Dd:e:F:f:hi:I:LlM:no:p:s:T:t:P:vV',
+            opts, args = getopt.getopt (args, 'c:Dd:e:F:f:hi:I:LlM:no:p:s:T:t:U:P:vV',
                 ['connection=', 'debug', 'doctype=', 'export=', 'field=', 'format=',
                  'help', 'import=', 'import-filter-name=', 'listener', 'meta=', 'no-launch',
                  'output=', 'outputpath', 'password=', 'pipe=', 'port=', 'preserve',
                  'server=', 'timeout=', 'show', 'stdin', 'stdout', 'template', 'printer=',
-                 'verbose', 'version'] )
+                 'userinstallation=', 'verbose', 'version'] )
         except getopt.error as exc:
             print('unoconv: %s, try unoconv -h for a list of all the options' % str(exc))
             sys.exit(255)
@@ -646,6 +647,8 @@ class Options:
                 self.template = arg
             elif opt in ['-T', '--timeout']:
                 self.timeout = int(arg)
+            elif opt in ['-U', '--userinstallation']:
+                self.userinstallation = arg
             elif opt in ['-v', '--verbose']:
                 self.verbose = self.verbose + 1
             elif opt in ['-V', '--version']:
@@ -760,6 +763,7 @@ unoconv options:
       --stdout                        write output to stdout
   -t, --template=file                 import the styles from template (.ott)
   -T, --timeout=secs                  timeout after secs if connection to listener fails
+  -U  --userinstallation=value        set the userinstallation to start the listener in
   -v, --verbose                       be more and more verbose (-vvv for debugging)
       --version                       display version number of unoconv, OOo/LO and platform details
   -P, --printer                       printer options
@@ -819,7 +823,12 @@ class Convertor:
                 if product.ooName not in ('LibreOffice', 'LOdev') or LooseVersion(product.ooSetupVersion) <= LooseVersion('3.3'):
                     ooproc = subprocess.Popen([office.binary, "-headless", "-invisible", "-nocrashreport", "-nodefault", "-nofirststartwizard", "-nologo", "-norestore", "-accept=%s" % op.connection], env=os.environ)
                 else:
-                    ooproc = subprocess.Popen([office.binary, "--headless", "--invisible", "--nocrashreport", "--nodefault", "--nofirststartwizard", "--nologo", "--norestore", "--accept=%s" % op.connection], env=os.environ)
+                    argv = [office.binary, "--headless", "--invisible", "--nocrashreport", "--nodefault", "--nofirststartwizard", "--nologo", "--norestore", "--accept=%s" % op.connection]
+
+                    if op.userinstallation:
+                        argv.append("-env:UserInstallation=file://" + op.userinstallation)
+
+                    ooproc = subprocess.Popen(argv, env=os.environ)
                 info(2, '%s listener successfully started. (pid=%s)' % (product.ooName, ooproc.pid))
 
                 ### Try connection to it for op.timeout seconds (flakky OpenOffice)
@@ -1185,6 +1194,10 @@ class Listener:
                 cmd = [office.binary, "-headless", "-invisible", "-nocrashreport", "-nodefault", "-nologo", "-nofirststartwizard", "-norestore", "-accept=%s" % op.connection]
             else:
                 cmd = [office.binary, "--headless", "--invisible", "--nocrashreport", "--nodefault", "--nologo", "--nofirststartwizard", "--norestore", "--accept=%s" % op.connection]
+                cmd = [office.binary, "--headless", "--invisible", "--nocrashreport", "--nodefault", "--nologo", "--nofirststartwizard", "--norestore", "--accept=%s" % op.connection]
+
+                if op.userinstallation:
+                    cmd.append("-env:UserInstallation=file://" + op.userinstallation)
 
             # The rationale for using subprocess.Popen is to be able to handle
             # a SIGTERM signal below and properly terminate the started office
@@ -1243,7 +1256,12 @@ def die(ret, msg=None):
                 if product.ooName != "LibreOffice" or product.ooSetupVersion <= 3.3:
                     subprocess.Popen([office.binary, "-headless", "-invisible", "-nocrashreport", "-nodefault", "-nofirststartwizard", "-nologo", "-norestore", "-unaccept=%s" % op.connection], env=os.environ)
                 else:
-                    subprocess.Popen([office.binary, "--headless", "--invisible", "--nocrashreport", "--nodefault", "--nofirststartwizard", "--nologo", "--norestore", "--unaccept=%s" % op.connection], env=os.environ)
+                    argv = [office.binary, "--headless", "--invisible", "--nocrashreport", "--nodefault", "--nofirststartwizard", "--nologo", "--norestore", "--unaccept=%s" % op.connection]
+
+                    if op.userinstallation:
+                        argv.append("-env:UserInstallation=file://" + op.userinstallation)
+
+                    subprocess.Popen(argv, env=os.environ)
                 ooproc.wait()
                 info(2, '%s listener successfully disabled.' % product.ooName)
             except Exception as e:
